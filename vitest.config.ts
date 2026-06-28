@@ -11,7 +11,12 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/**/*.ts", "src/**/*.tsx", "server/**/*.ts"],
-      exclude: ["**/*.test.ts", "**/*.test.tsx", "src/main.tsx"],
+      exclude: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "src/main.tsx",
+        "server/index.ts", // http wiring; covered by manual/E2E, not unit tests
+      ],
       thresholds: {
         lines: 80,
         functions: 80,
