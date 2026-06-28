@@ -1,0 +1,92 @@
+.character {
+  width: min(64vw, 340px);
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(var(--shadow-soft));
+}
+
+.character__head {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-width: 4;
+}
+
+.character__ear {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-width: 4;
+}
+
+.character__cheek {
+  fill: var(--color-primary);
+  opacity: 0.35;
+}
+
+.character__eyes circle {
+  fill: var(--color-ink);
+}
+
+.character__eyes path {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.character__mouth path,
+.character__mouth ellipse {
+  fill: var(--color-primary-press);
+  stroke: var(--color-ink);
+  stroke-width: 3;
+}
+
+.character__mouth path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 5;
+}
+
+.character__sparkles path {
+  fill: var(--color-accent);
+}
+
+/* Mouth flap: scale the open mouth vertically while the teacher speaks. */
+.character__mouth-open {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.character[data-mouth="moving"] .character__mouth-open {
+  animation: mouth-flap 220ms var(--ease-out-expo) infinite alternate;
+}
+
+@keyframes mouth-flap {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Gentle idle bob for life; disabled under reduced motion. */
+.character {
+  animation: idle-bob 3.5s ease-in-out infinite;
+}
+
+@keyframes idle-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character,
+  .character[data-mouth="moving"] .character__mouth-open {
+    animation: none;
+  }
+}

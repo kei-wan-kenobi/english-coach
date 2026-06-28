@@ -18,6 +18,9 @@ export default defineConfig({
         "server/index.ts", // http wiring; covered by manual/E2E, not unit tests
         "src/live/liveConnector.ts", // real SDK/socket glue; manual/E2E
         "src/audio/micCapture.ts", // real WebAudio mic glue; manual/E2E
+        "src/app/useLesson.ts", // wires live + audio + mic; manual/E2E
+        "src/app/App.tsx", // top-level composition; E2E/visual
+        "src/character/Character.tsx", // presentational SVG; component + visual tests
       ],
       thresholds: {
         lines: 80,

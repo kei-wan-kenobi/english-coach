@@ -1,0 +1,131 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+  color: var(--color-ink);
+}
+
+.stage {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-section) var(--space-3);
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, var(--color-bg-glow), transparent 60%),
+    var(--color-bg);
+  text-align: center;
+}
+
+/* Soft floating glow behind the character for depth. */
+.stage__glow {
+  position: absolute;
+  inset: auto;
+  width: min(70vw, 460px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-sky), transparent 65%);
+  filter: blur(8px);
+  opacity: 0.7;
+  z-index: 0;
+  animation: glow-drift 6s ease-in-out infinite;
+}
+
+.stage > *:not(.stage__glow) {
+  position: relative;
+  z-index: 1;
+}
+
+.stage__title {
+  margin: 0;
+  font-size: var(--text-hint);
+  letter-spacing: 0.08em;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+}
+
+.caption {
+  margin: 0;
+  font-size: var(--text-cap);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--color-ink);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--text-hint);
+  color: var(--color-primary-press);
+  font-weight: 700;
+}
+
+.cta {
+  appearance: none;
+  border: 4px solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  font-size: var(--text-cap);
+  font-weight: 900;
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  box-shadow: var(--shadow-lift);
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    background var(--duration-fast) var(--ease-out-expo);
+}
+
+.cta:hover {
+  transform: translateY(-3px) rotate(-1deg);
+}
+
+.cta:active {
+  transform: translateY(1px) scale(0.98);
+  background: var(--color-primary-press);
+}
+
+.cta:focus-visible {
+  outline: 4px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+.cta:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.cta--stop {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+@keyframes glow-drift {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4%) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage__glow,
+  .cta {
+    animation: none;
+    transition: none;
+  }
+}
