@@ -57,6 +57,8 @@ export function parseServerMessage(message: LiveServerMessage): ParsedMessage {
 
 export interface LiveSessionHandle {
   sendAudio(base64Pcm: string): void;
+  /** Send a text turn (used to kick off the teacher's opening greeting). */
+  sendText(text: string): void;
   close(): void;
 }
 
@@ -96,6 +98,14 @@ export class LiveClient {
 
   sendAudio(base64Pcm: string): void {
     this.session?.sendAudio(base64Pcm);
+  }
+
+  /**
+   * Send a text turn. Gemini Live never speaks first, so the app sends a kickoff
+   * message after connecting to trigger the teacher's opening greeting.
+   */
+  sendText(text: string): void {
+    this.session?.sendText(text);
   }
 
   async close(): Promise<void> {

@@ -76,14 +76,16 @@ function fakeConnector() {
     handle: LiveSessionHandle;
     callbacks: LiveConnectorCallbacks;
     sendAudio: ReturnType<typeof vi.fn>;
+    sendText: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
   }> = [];
   const connect = vi.fn(
     async (args: { resumptionHandle?: string; callbacks: LiveConnectorCallbacks }) => {
       const sendAudio = vi.fn();
+      const sendText = vi.fn();
       const close = vi.fn();
-      const handle: LiveSessionHandle = { sendAudio, close };
-      sessions.push({ handle, callbacks: args.callbacks, sendAudio, close });
+      const handle: LiveSessionHandle = { sendAudio, sendText, close };
+      sessions.push({ handle, callbacks: args.callbacks, sendAudio, sendText, close });
       return handle;
     },
   );
@@ -113,6 +115,14 @@ describe("LiveClient", () => {
     await client.start();
     client.sendAudio("PCM64");
     expect(sessions[0].sendAudio).toHaveBeenCalledWith("PCM64");
+  });
+
+  it("sends a kickoff text turn through the active session", async () => {
+    const { connector, sessions } = fakeConnector();
+    const client = new LiveClient(connector, { onEvents: vi.fn() });
+    await client.start();
+    client.sendText("はじめまして");
+    expect(sessions[0].sendText).toHaveBeenCalledWith("はじめまして");
   });
 
   it("reconnects with the saved resumption handle when the socket drops", async () => {

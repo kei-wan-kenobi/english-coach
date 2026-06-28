@@ -98,8 +98,8 @@ describe("buildSystemInstruction", () => {
     expect(text).toContain("poor");
   });
 
-  it("instructs the model to announce its lesson move via set_phase", () => {
-    expect(text).toContain(PHASE_TOOL_NAME);
+  it("insists the teacher answers out loud (voice-first)", () => {
+    expect(text).toContain("音声");
   });
 
   it("encodes the Japanese-first / English-target language policy", () => {
@@ -147,11 +147,11 @@ describe("buildLiveConfig", () => {
     expect(aad?.endOfSpeechSensitivity).toBe(EndSensitivity.END_SENSITIVITY_LOW);
   });
 
-  it("includes the system instruction and both tools", () => {
+  it("includes the system instruction and only the evaluation tool", () => {
     const cfg = buildLiveConfig();
     expect(typeof cfg.systemInstruction).toBe("string");
     expect(cfg.tools).toEqual([
-      { functionDeclarations: [buildEvaluationTool(), buildPhaseTool()] },
+      { functionDeclarations: [buildEvaluationTool()] },
     ]);
   });
 });

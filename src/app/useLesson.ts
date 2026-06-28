@@ -1,19 +1,32 @@
 /**
- * React hook that wires the whole live lesson together: token-authenticated Live
- * client, gapless playback queue, mic capture, the lesson controller, and the
- * silence timer. Thin glue around tested units — verified manually / via E2E.
+ * React hook that runs the live lesson (slim, voice-first mode).
+ *
+ * The teacher (model) drives the conversation by voice; this hook handles the
+ * I/O: token-authenticated Live client, gapless playback, mic capture, and
+ * barge-in (clear playback when the child interrupts). The character is derived
+ * from whether the teacher is currently speaking, with a brief celebration when
+ * the model reports a good repetition.
+ *
+ * Thin glue around tested units — verified manually / via E2E.
  */
 import { useCallback, useRef, useState } from "react";
 import { PlaybackQueue, type MinimalAudioContext } from "../audio/playbackQueue";
 import { startMicCapture, type MicCapture } from "../audio/micCapture";
 import { LiveClient } from "../live/liveClient";
 import { createBrowserConnector } from "../live/liveConnector";
-import { LessonController, type SilenceTimer } from "../lesson/lessonController";
+import { EVALUATION_TOOL_NAME } from "../live/liveConfig";
+import type { GeminiEvent } from "../live/lessonBridge";
 import { characterView, type CharacterView } from "../character/characterController";
-import { initialLessonState, type LessonState } from "../conversation/stateMachine";
+import type { Phase } from "../conversation/stateMachine";
 import { phaseCaption } from "./captions";
 
 const OUTPUT_SAMPLE_RATE = 24000;
+const CELEBRATE_MS = 2500;
+
+// Gemini Live never speaks first. A natural greeting kickoff (as if the child
+// just walked up) reliably elicits a spoken greeting; an instruction-style
+// prompt instead makes the model go silent, so keep this conversational.
+const KICKOFF_PROMPT = "せんせい、こんにちは！";
 
 export type LessonStatus = "idle" | "connecting" | "live" | "ended" | "error";
 
@@ -26,37 +39,41 @@ export interface UseLesson {
   stop: () => Promise<void>;
 }
 
-function makeTimer(): SilenceTimer {
-  let handle: ReturnType<typeof setTimeout> | null = null;
-  return {
-    arm(ms, onFire) {
-      if (handle) clearTimeout(handle);
-      handle = setTimeout(onFire, ms);
-    },
-    disarm() {
-      if (handle) clearTimeout(handle);
-      handle = null;
-    },
-  };
-}
-
 export function useLesson(): UseLesson {
   const [status, setStatus] = useState<LessonStatus>("idle");
-  const [lessonState, setLessonState] = useState<LessonState>(initialLessonState);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const refs = useRef<{
     context?: AudioContext;
     queue?: PlaybackQueue;
     client?: LiveClient;
-    controller?: LessonController;
     mic?: MicCapture;
+    celebrateTimer?: ReturnType<typeof setTimeout>;
   }>({});
 
   const reducedMotion =
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  const handleEvents = useCallback((queue: PlaybackQueue, events: GeminiEvent[]) => {
+    for (const event of events) {
+      if (event.kind === "audioChunk") {
+        queue.enqueue(event.base64);
+      } else if (event.kind === "interrupted") {
+        queue.clear(); // barge-in: stop the teacher when the child cuts in
+      } else if (
+        event.kind === "toolCall" &&
+        event.name === EVALUATION_TOOL_NAME &&
+        event.args.quality === "good"
+      ) {
+        setCelebrating(true);
+        if (refs.current.celebrateTimer) clearTimeout(refs.current.celebrateTimer);
+        refs.current.celebrateTimer = setTimeout(() => setCelebrating(false), CELEBRATE_MS);
+      }
+    }
+  }, []);
 
   const start = useCallback(async () => {
     if (status !== "idle" && status !== "ended" && status !== "error") return;
@@ -66,21 +83,11 @@ export function useLesson(): UseLesson {
       const context = new AudioContext();
       await context.resume();
       const queue = new PlaybackQueue(
-        // Real AudioContext satisfies the minimal interface; the only mismatch
-        // is the broader DOM onended signature.
         context as unknown as MinimalAudioContext,
-        {
-          sampleRate: OUTPUT_SAMPLE_RATE,
-          onPlayingChange: setIsPlaying,
-        },
+        { sampleRate: OUTPUT_SAMPLE_RATE, onPlayingChange: setIsPlaying },
       );
-      const controller = new LessonController({
-        playbackQueue: queue,
-        timer: makeTimer(),
-        onStateChange: setLessonState,
-      });
       const client = new LiveClient(createBrowserConnector(), {
-        onEvents: (events) => controller.handleGeminiEvents(events),
+        onEvents: (events) => handleEvents(queue, events),
         onError: (error) => {
           setStatus("error");
           setErrorMessage(error instanceof Error ? error.message : "つながらなかったよ");
@@ -91,8 +98,9 @@ export function useLesson(): UseLesson {
       await client.start();
       const mic = await startMicCapture({ onChunk: (b64) => client.sendAudio(b64) });
 
-      refs.current = { context, queue, client, controller, mic };
-      controller.start();
+      refs.current = { ...refs.current, context, queue, client, mic };
+      // Trigger the teacher's opening greeting (the model won't speak first).
+      client.sendText(KICKOFF_PROMPT);
       setStatus("live");
     } catch (error) {
       setStatus("error");
@@ -100,26 +108,32 @@ export function useLesson(): UseLesson {
         error instanceof Error ? error.message : "マイクが つかえなかったよ",
       );
     }
-  }, [status]);
+  }, [status, handleEvents]);
 
   const stop = useCallback(async () => {
-    const { client, mic, context } = refs.current;
+    const { client, mic, context, celebrateTimer } = refs.current;
+    if (celebrateTimer) clearTimeout(celebrateTimer);
     await mic?.stop();
     await client?.close();
     await context?.close();
     refs.current = {};
     setIsPlaying(false);
+    setCelebrating(false);
     setStatus("ended");
   }, []);
 
+  // Derive the character/caption from a coarse phase: the teacher's voice drives
+  // everything in slim mode, so we don't track the full lesson state machine.
+  const phase: Phase = celebrating
+    ? "praiseNext"
+    : isPlaying
+      ? "teachingExample"
+      : "listeningQuestion";
+
   return {
     status,
-    caption: phaseCaption(lessonState.phase),
-    character: characterView({
-      phase: lessonState.phase,
-      isAudioPlaying: isPlaying,
-      reducedMotion,
-    }),
+    caption: phaseCaption(phase),
+    character: characterView({ phase, isAudioPlaying: isPlaying, reducedMotion }),
     errorMessage,
     start,
     stop,

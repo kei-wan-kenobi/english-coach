@@ -77,6 +77,12 @@ export function createBrowserConnector(
             audio: { data: base64Pcm, mimeType: INPUT_MIME },
           });
         },
+        sendText: (text: string) => {
+          session.sendClientContent({
+            turns: [{ role: "user", parts: [{ text }] }],
+            turnComplete: true,
+          });
+        },
         close: () => session.close(),
       };
     },
