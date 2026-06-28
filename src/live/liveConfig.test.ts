@@ -5,7 +5,9 @@ import {
   DEFAULT_VOICE_NAME,
   DEFAULT_END_SILENCE_MS,
   EVALUATION_TOOL_NAME,
+  PHASE_TOOL_NAME,
   buildEvaluationTool,
+  buildPhaseTool,
   buildVadConfig,
   buildSystemInstruction,
   buildLiveConfig,
@@ -47,6 +49,23 @@ describe("buildEvaluationTool", () => {
   });
 });
 
+describe("buildPhaseTool", () => {
+  it("declares set_phase with the model-announced lesson moves", () => {
+    const tool = buildPhaseTool();
+    expect(tool.name).toBe(PHASE_TOOL_NAME);
+    expect(tool.name).toBe("set_phase");
+    expect(tool.parameters?.type).toBe(Type.OBJECT);
+    expect(tool.parameters?.properties?.phase?.enum).toEqual([
+      "teaching",
+      "prompting",
+      "chitchat",
+      "ending",
+    ]);
+    expect(tool.parameters?.properties?.targetPhrase?.type).toBe(Type.STRING);
+    expect(tool.parameters?.required).toEqual(["phase"]);
+  });
+});
+
 describe("buildVadConfig", () => {
   it("makes the child easy to barge in but is slow to end the turn", () => {
     const vad = buildVadConfig();
@@ -77,6 +96,10 @@ describe("buildSystemInstruction", () => {
     expect(text).toContain("good");
     expect(text).toContain("close");
     expect(text).toContain("poor");
+  });
+
+  it("instructs the model to announce its lesson move via set_phase", () => {
+    expect(text).toContain(PHASE_TOOL_NAME);
   });
 
   it("encodes the Japanese-first / English-target language policy", () => {
@@ -120,11 +143,11 @@ describe("buildLiveConfig", () => {
     expect(aad?.endOfSpeechSensitivity).toBe(EndSensitivity.END_SENSITIVITY_LOW);
   });
 
-  it("includes the system instruction and the evaluation tool", () => {
+  it("includes the system instruction and both tools", () => {
     const cfg = buildLiveConfig();
     expect(typeof cfg.systemInstruction).toBe("string");
     expect(cfg.tools).toEqual([
-      { functionDeclarations: [buildEvaluationTool()] },
+      { functionDeclarations: [buildEvaluationTool(), buildPhaseTool()] },
     ]);
   });
 });

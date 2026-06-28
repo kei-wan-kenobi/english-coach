@@ -28,6 +28,7 @@ export const DEFAULT_VOICE_NAME = "Puck";
 export const DEFAULT_END_SILENCE_MS = 1500;
 
 export const EVALUATION_TOOL_NAME = "report_evaluation";
+export const PHASE_TOOL_NAME = "set_phase";
 
 export interface LiveConfigOptions {
   voiceName?: string;
@@ -68,6 +69,39 @@ export function buildEvaluationTool(): FunctionDeclaration {
         },
       },
       required: ["quality"],
+    },
+  };
+}
+
+/**
+ * Tool the model calls to announce the lesson move it is making, so the app's
+ * state machine stays in sync with what the teacher is actually doing (e.g. a
+ * single spoken turn that both teaches and prompts).
+ */
+export function buildPhaseTool(): FunctionDeclaration {
+  return {
+    name: PHASE_TOOL_NAME,
+    description:
+      "Announce the lesson move you are about to make. Call this whenever you " +
+      "start teaching a phrase, ask the child to repeat, handle off-topic chat, " +
+      "or end the lesson.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        phase: {
+          type: Type.STRING,
+          enum: ["teaching", "prompting", "chitchat", "ending"],
+          description:
+            "teaching = you understood the question and will say the English example; " +
+            "prompting = you are asking the child to repeat; " +
+            "chitchat = the child said something off-topic; ending = the lesson is over.",
+        },
+        targetPhrase: {
+          type: Type.STRING,
+          description: "The English phrase being taught (required when phase is teaching).",
+        },
+      },
+      required: ["phase"],
     },
   };
 }
@@ -118,6 +152,11 @@ export function buildSystemInstruction(): string {
     "  good=はっきり伝わる, close=ほぼOKだが1点直したい, poor=聞き取りにくい。",
     "- 惜しいとき(close)は tip に短いヒントを入れます。",
     "- heardText には聞き取った内容、targetPhrase には対象の英語表現を入れます。",
+    "",
+    "【レッスンの進行報告（重要）】",
+    `- 自分が次にする動きを ${PHASE_TOOL_NAME} ツールで申告します。`,
+    "  英語のお手本を言う直前は teaching（targetPhrase に英語表現）、",
+    "  復唱を促すときは prompting、雑談対応は chitchat、終了は ending。",
   ].join("\n");
 }
 
@@ -138,6 +177,8 @@ export function buildLiveConfig(
     outputAudioTranscription: {},
     realtimeInputConfig: buildVadConfig(options),
     systemInstruction: buildSystemInstruction(),
-    tools: [{ functionDeclarations: [buildEvaluationTool()] }],
+    tools: [
+      { functionDeclarations: [buildEvaluationTool(), buildPhaseTool()] },
+    ],
   };
 }
