@@ -134,6 +134,10 @@ describe("buildLiveConfig", () => {
     expect(cfg.outputAudioTranscription).toEqual({});
   });
 
+  it("enables session resumption so the server emits resume handles", () => {
+    expect(buildLiveConfig().sessionResumption).toEqual({});
+  });
+
   it("wires the tuned VAD config", () => {
     const aad =
       buildLiveConfig().realtimeInputConfig?.automaticActivityDetection;

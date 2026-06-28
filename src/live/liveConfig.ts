@@ -175,6 +175,9 @@ export function buildLiveConfig(
     },
     inputAudioTranscription: {},
     outputAudioTranscription: {},
+    // Enable resume handles so we can reconnect (e.g. at the 15-min limit)
+    // without losing conversation context.
+    sessionResumption: {},
     realtimeInputConfig: buildVadConfig(options),
     systemInstruction: buildSystemInstruction(),
     tools: [
