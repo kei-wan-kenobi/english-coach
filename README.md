@@ -78,6 +78,10 @@ npm run build
 - 音声セッションは 15 分上限。上限到達時はセッション再開ハンドルで自動再接続します。
 - 子供の音声は保存しません（ローカル前提・ログ最小化）。
 
+## ライセンス
+
+[MIT License](./LICENSE) で公開しています。
+
 ## Disclaimer
 
 これは個人のプロジェクトです。ここに表明されているコード、意見は私個人のものであり、現在または過去の雇用主を代表するものではありません。
@@ -164,6 +168,10 @@ session: `/?demo=speaking` (`speaking` / `listening` / `waiting` / `celebrating`
 - Voice sessions are capped at 15 minutes; the app auto-reconnects with a session
   resumption handle when the cap is hit.
 - The child's voice is never stored (local-first, minimal logging).
+
+## License
+
+Released under the [MIT License](./LICENSE).
 
 ## Disclaimer
 
