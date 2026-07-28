@@ -92,7 +92,7 @@ English model phrase, prompts the child to repeat it, evaluates the pronunciatio
 whether to retry or move on. Since young children struggle with turn-taking, the app uses
 real-time voice conversation that allows barge-in interruptions.
 
-See [requirements.md](./requirements.md) for detailed requirements (Japanese).
+See [requirements.md](./requirements.md) for detailed requirements.
 
 ## Requirements
 
