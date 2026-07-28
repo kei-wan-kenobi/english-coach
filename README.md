@@ -75,3 +75,9 @@ npm run build
   （`.env` の `GEMINI_LIVE_MODEL` で上書き可）。
 - 音声セッションは 15 分上限。上限到達時はセッション再開ハンドルで自動再接続します。
 - 子供の音声は保存しません（ローカル前提・ログ最小化）。
+
+## Disclaimer
+
+This is a personal project. The views, code, and opinions expressed here are my own and do not represent those of my current or past employers.
+
+これは個人のプロジェクトです。ここに表明されているコード、意見は私個人のものであり、現在または過去の雇用主を代表するものではありません。
