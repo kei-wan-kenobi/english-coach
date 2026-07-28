@@ -2,6 +2,7 @@
   "name": "english-coach",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Real-time voice English coach for 4-5 year olds, powered by Gemini Live API",
   "scripts": {
