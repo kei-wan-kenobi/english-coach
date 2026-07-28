@@ -1,5 +1,7 @@
 # English Coach — 要件定義書 (requirements.md)
 
+(English follows Japanese)
+
 > Gemini 3.1 Flash Live Preview を使った、4〜5歳児向けのリアルタイム音声英語コーチ Web アプリ。
 
 最終更新: 2026-06-28
@@ -310,3 +312,315 @@ TDD（RED → GREEN → REFACTOR）で進める。純粋ロジックを厚く単
 ### 未確定（実装中に確定）
 - 先生の声（voiceName）と、英語：日本語フォローの比率。
 - `@google/genai` のバージョンと 3.1 Flash Live の正式フィールド名（実装直前に確定）。
+
+---
+
+# English Coach — Requirements (English)
+
+> A real-time voice English coach web app for 4–5 year olds, powered by Gemini 3.1 Flash Live Preview.
+
+Last updated: 2026-06-28
+
+---
+
+## 1. Purpose / Concept
+
+When a 4–5 year old child asks in Japanese "How do you say XXX in English?", an AI teacher character:
+
+1. Says a **model phrase** in English,
+2. Prompts the child to **repeat the same phrase**,
+3. Listens to the child's pronunciation and **evaluates it**,
+4. **Decides** whether to say "let's try once more" or "what would you like to say next?"
+
+— all through **real-time voice** conversation, with an animated speaking character on screen.
+
+The core goal of this app is that **young children who are still poor at turn-taking can converse naturally**.
+For that reason it uses the **Gemini Live API native audio model**, which offers low latency and robust barge-in handling.
+
+---
+
+## 2. Target Users / Personas
+
+- **Primary user**: 4–5 year old children (cannot read hiragana or English; minimal UI operation)
+- **Secondary user**: parents (launching the app, supervising, configuring the API key)
+- Environment: a home PC browser (local-first; Chromium-based browsers as the main target)
+
+### Characteristics of young children (the most important design premise)
+
+- Poor at turn-taking: they may **keep talking even after the answer has started**.
+- They need long thinking time: **replies may start well after the teacher stops speaking**.
+- Frequent silence, hesitation, and repetition.
+- They cannot read → **the UI is primarily voice and pictures; text is secondary**.
+
+---
+
+## 3. Scope
+
+### 3.1 In Scope
+
+- A web app that runs locally via `npm run dev` or similar
+- Real-time dialogue: microphone input → Gemini Live API → audio output
+- Receive a Japanese question → present an English model phrase → prompt repetition → evaluate pronunciation → decide retry/next
+- Conversation control that tolerates barge-in (child interruptions)
+- A speaking character on screen (talking animation)
+- A **local ephemeral-token server** so the API key is never exposed to the browser
+
+### 3.2 Out of Scope
+
+- Production deployment / authentication / multi-user / account management
+- Persistent learning progress or analytics dashboards
+- Language pairs other than English ↔ Japanese
+- Native apps / mobile optimization
+- Full billing, usage limits, or rate limiting (minimal only)
+
+---
+
+## 4. Functional Requirements
+
+### FR-1 Session start
+- FR-1.1: When a parent presses the "Start" button, request microphone permission and start a Live session.
+- FR-1.2: On startup, fetch an ephemeral token from the token server and connect with it.
+- FR-1.3: If microphone permission is denied, ask again with a picture and voice a child can understand.
+
+### FR-2 Receiving questions (Japanese)
+- FR-2.1: Accept the child's Japanese speech such as "How do you say ◯◯ in English?"
+- FR-2.2: Even mid-question or during hesitation, the teacher waits without rushing (see turn-taking design below).
+
+### FR-3 Presenting the model phrase (English)
+- FR-3.1: The teacher speaks the target English expression **slowly, briefly, and in a child-friendly way**.
+- FR-3.2: Example: ""Apple" だよ。リンゴは英語で "Apple"。いっしょに言ってみよう！" — English first, followed by a Japanese follow-up.
+- FR-3.3: One model phrase is normally a **short expression of about 1–4 words**.
+
+### FR-4 Prompting repetition
+- FR-4.1: The teacher gently prompts the child to say the same English phrase.
+- FR-4.2: Even if the child stays silent, the teacher **waits without rushing** for the configured time.
+- FR-4.3: If there is still no response, repeat the model phrase → prompt again (with a maximum retry count).
+
+### FR-5 Pronunciation evaluation
+- FR-5.1: The teacher evaluates the child's pronunciation from the speech audio (heard directly by the native audio model).
+- FR-5.2: Feedback is **always positive in tone** (never undermining a young child's self-esteem).
+  - Good: "すごい！じょうずだね！"
+  - Close: "いいね！もう一回、"ア"を強く言ってみよう！"
+- FR-5.3: The evaluation result drives the next branch (FR-6).
+
+### FR-6 Retry / move-on decision
+- FR-6.1: If the pronunciation is good enough, **praise → guide to the next expression** ("ほかには何が知りたい？").
+- FR-6.2: If not, **encourage → prompt the same expression again** (after N retries, gently move on).
+- FR-6.3: State transitions are managed by an app-side state machine, driven by structured signals (tool calls) from the model (see below).
+
+### FR-7 Character display
+- FR-7.1: Show the teacher character in the center of the screen.
+- FR-7.2: While the teacher is **speaking**, show a talking animation (mouth movement etc.).
+- FR-7.3: Switch expressions/motions by state: child speaking (listening) / waiting / celebrating, etc.
+- FR-7.4: Animation control logic is separated from rendering and unit-testable.
+
+### FR-8 Turn-taking / barge-in (most important)
+- FR-8.1: **The teacher never proactively talks over the child.**
+- FR-8.2: The child can **interrupt at any time while the teacher is speaking**. On interruption,
+  stop the teacher's audio output immediately and clear the playback queue (driven by the `interrupted` flag).
+- FR-8.3: Allow the state where the teacher is speaking while still hearing the child (concurrency OK).
+- FR-8.4: Tolerate long silence/thinking time from the child (do not end the turn on short silence).
+  - Set the end-of-speech silence threshold long (e.g. 1200–2000 ms, to be tuned).
+- FR-8.5: After an interruption, respond to the child's new utterance carrying over the context.
+
+### FR-9 Parent-facing configuration
+- FR-9.1: The API key is set via environment variables (`.env`) and never exposed to the browser.
+- FR-9.2: When the session time limit is reached (15 minutes, audio-only), end gently or reconnect automatically.
+
+---
+
+## 5. Conversation Flow / State Machine
+
+The app manages conversation progress with a pure state machine (reducer) over the states below.
+Transitions are driven by (a) user audio events, (b) model audio / `interrupted`, and (c) model tool calls.
+
+```
+IDLE
+  └─(start)──────────────► LISTENING_QUESTION   // wait for / listen to the child's question
+LISTENING_QUESTION
+  └─(question captured)──► TEACHING_EXAMPLE      // speak the English model phrase
+TEACHING_EXAMPLE
+  └─(example done)───────► PROMPT_REPEAT         // "いっしょに言ってみよう"
+PROMPT_REPEAT
+  ├─(child speaks)───────► LISTENING_REPEAT      // listen to the repetition
+  └─(silence timeout)────► PROMPT_REPEAT (retry) / TEACHING_EXAMPLE
+LISTENING_REPEAT
+  └─(repeat captured)────► EVALUATING            // evaluate pronunciation
+EVALUATING
+  ├─(good enough)────────► PRAISE_NEXT ──► LISTENING_QUESTION
+  └─(needs retry)────────► ENCOURAGE_RETRY ──► PROMPT_REPEAT
+(any speaking state)
+  └─(child barge-in)─────► stop + clear playback → corresponding LISTENING_*
+```
+
+- The evaluation verdict (good_enough / needs_retry) is **returned by the model via function calling** (e.g. `report_evaluation`), which branches the app-side state machine.
+- After exceeding the retry cap (e.g. max 3 tries per expression), gently guide to the next expression.
+
+---
+
+## 6. Tech Stack / Architecture
+
+### 6.1 Structure
+
+```
+[Browser SPA]  ──(1) GET /api/token──►  [Local Token Server (Node)]
+     │                                         │ holds GEMINI_API_KEY (.env)
+     │                                         └─► Gemini API: mint ephemeral token
+     │  ◄────────────── ephemeral token ───────┘
+     │
+     └──(2) WebSocket (ephemeral token)──►  [Gemini Live API]
+            mic PCM16/16kHz  ▲ │ ▼ audio 24kHz + transcripts + tool calls
+```
+
+- **(1) Token Server**: a minimal local Node server. Holds `GEMINI_API_KEY` and returns only
+  short-lived ephemeral tokens to the browser. **The API key is never sent to the browser.**
+- **(2) Browser SPA**: mic capture → Float32→PCM16/16kHz conversion → WS send;
+  playback of received 24 kHz audio with queueing and barge-in flush; character rendering; state machine.
+
+### 6.2 Technology choices
+
+- Language/build: **TypeScript + Vite**
+- UI: **React** (decided)
+- Tests: **Vitest** (unit/integration) + **Playwright** (E2E / visual regression)
+- Server: **Node (Express or plain http)** + the `@google/genai` SDK
+- Audio: WebAudio API (PCM capture/playback via AudioWorklet)
+- SDK: **`@google/genai`** (supports Live API / ephemeral tokens)
+
+### 6.3 Directory layout (by feature/domain)
+
+```
+english_coach/
+├── requirements.md
+├── .env.example                 # GEMINI_API_KEY=...
+├── server/
+│   ├── tokenServer.ts           # ephemeral token minting
+│   └── tokenServer.test.ts
+├── src/
+│   ├── audio/
+│   │   ├── pcm.ts               # Float32↔PCM16, base64 (pure functions)
+│   │   ├── pcm.test.ts
+│   │   ├── playbackQueue.ts     # playback queue + barge-in flush
+│   │   └── playbackQueue.test.ts
+│   ├── live/
+│   │   ├── liveConfig.ts        # model name / VAD / system instruction (pure)
+│   │   ├── liveConfig.test.ts
+│   │   ├── liveClient.ts        # WS connection & event bridging (I/O)
+│   │   └── tools.ts             # function definitions such as report_evaluation
+│   ├── conversation/
+│   │   ├── stateMachine.ts      # conversation state reducer (pure)
+│   │   └── stateMachine.test.ts
+│   ├── character/
+│   │   ├── characterController.ts  # speech state → animation state (pure logic)
+│   │   ├── characterController.test.ts
+│   │   └── Character.tsx           # rendering
+│   ├── app/
+│   │   └── App.tsx
+│   └── main.tsx
+├── e2e/
+│   └── smoke.spec.ts
+└── (vite/tsconfig/package.json etc.)
+```
+
+---
+
+## 7. Gemini Live API Configuration Details (implementation policy)
+
+| Item | Value / Policy |
+|------|----------------|
+| Model | `gemini-3.1-flash-live-preview` (native audio) |
+| Connection | WebSocket (`@google/genai` Live session); the browser authenticates with an ephemeral token |
+| Input audio | 16-bit PCM, little-endian, 16 kHz, `audio/pcm;rate=16000` |
+| Output audio | 24 kHz PCM, `response_modalities: ["AUDIO"]` |
+| Input transcription | `input_audio_transcription: {}` (logging / evaluation aid) |
+| Output transcription | `output_audio_transcription: {}` (captions / debugging) |
+| VAD | use `realtimeInputConfig.automaticActivityDetection` |
+| Barge-in | `startOfSpeechSensitivity: HIGH` (easy for the child to interrupt) |
+| End-of-speech | long `silenceDurationMs` (roughly 1200–2000 ms), `endOfSpeechSensitivity: LOW` (don't cut early) |
+| Concurrency | use proactive audio so the teacher never needlessly talks over the child; allow listen-while-speaking |
+| Voice | `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` (pick a gentle voice) |
+| Tools | drive the state machine via function calling such as `report_evaluation(quality, should_retry)` |
+| System instruction | states: for 4–5 year olds, short, gentle, always praise, English then Japanese follow-up, report evaluation via the tool |
+| Session cap | 15 minutes audio-only; wrap up gently or reconnect before the cap |
+
+> ⚠️ The Live API / 3.1 Flash Live is a **preview**. Re-check field and model names against the latest docs before implementing.
+
+---
+
+## 8. Non-Functional Requirements
+
+- **NFR-1 Latency**: keep the gap between the child finishing speaking and the response starting as short as possible (feels immediate).
+- **NFR-2 Security**: never expose the API key to the browser. Ephemeral tokens are short-lived.
+  `.env` is git-ignored; only `.env.example` is committed.
+- **NFR-3 Safety / child considerations**: output is always positive and uses safe vocabulary; have a policy for filtering inappropriate words.
+- **NFR-4 Accessibility**: assume the child cannot read. One big button plus voice.
+  Respect reduced-motion settings. Ensure color contrast.
+- **NFR-5 Availability**: on network loss / token expiry, reconnect gently or show a child-friendly error (picture + voice).
+- **NFR-6 Maintainability**: 200–400 lines per file (max 800); separate pure logic from I/O.
+
+---
+
+## 9. Test Strategy (TDD)
+
+Follow TDD (RED → GREEN → REFACTOR). Unit-test pure logic heavily; keep I/O thin and cover it with integration/E2E tests.
+
+### 9.1 Unit tests (Vitest, coverage target 80%+)
+- `audio/pcm`: Float32→PCM16 range, clipping, endianness, base64 round-trip.
+- `audio/playbackQueue`: ordering of consecutive chunks, queue flush on `interrupted`.
+- `live/liveConfig`: generated model name / VAD params / system instruction / tool definitions.
+- `conversation/stateMachine`: all transitions, retry cap, barge-in transitions, silence timeout.
+- `character/characterController`: speaking/listening/waiting/celebrating → animation state mapping.
+
+### 9.2 Integration tests
+- `server/tokenServer`: successful minting, error when the API key is missing, no key leakage in responses.
+- Mock Gemini for the Live client and verify event → state machine bridging.
+
+### 9.3 E2E / visual regression (Playwright)
+- Smoke: launch → "Start" → mic permission (mocked) → character visible.
+- Screenshots at breakpoints 320/768/1024/1440; verify the talking-animation state.
+- Replace Gemini with a test fake (never hit the real API in E2E).
+
+---
+
+## 10. Risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| 3.1 Flash Live is preview (API changes) | High | Check latest docs before implementing; wrap the SDK thinly |
+| Pronunciation-evaluation accuracy for young children | Medium | Evaluate leniently and always positively; make thresholds tunable |
+| False barge-in detection (ambient noise) | Medium | Tune VAD sensitivity; assume a quiet home environment |
+| Browser audio-processing compatibility | Medium | Target Chromium browsers; assume AudioWorklet |
+| 15-minute session cap | Low | Guide to a break or reconnect |
+| Child privacy (voice) | High | Never store audio; local-first; minimal logging |
+
+---
+
+## 11. Acceptance Criteria
+
+- AC-1: Runs locally; after granting mic permission in the browser, you can talk with the teacher by voice.
+- AC-2: For a Japanese question, the full loop works: English model phrase → repetition prompt → pronunciation evaluation → retry/next guidance.
+- AC-3: If the child interrupts while the teacher is speaking, the teacher's audio stops immediately and the child's speech is accepted.
+- AC-4: The teacher waits without rushing even if the child is silent for several seconds (no turn cut on short silence).
+- AC-5: While the teacher speaks, the character shows a talking animation.
+- AC-6: The API key never appears in browser traffic or the bundle.
+- AC-7: Unit tests for pure logic (pcm / stateMachine / liveConfig / characterController) are green with 80%+ coverage.
+
+---
+
+## 12. Decisions / Open Items
+
+### Decided (2026-06-28)
+1. UI framework: **React + Vite**.
+2. Character assets: **hand-made SVG + mouth animation** (no dependencies; reduced-motion support).
+3. Opening behavior: **the teacher greets first** (`greeting` phase).
+4. Interruptions during the model phrase: **the model phrase is spoken to completion** (`teachingExample` is not interrupted by the child's speech).
+5. Off-topic utterances: **go along briefly, then steer back** (`chitchat` phase → back to waiting for a question).
+6. Evaluation granularity: **3 levels — `good` / `close` / `poor`**.
+   - `good` → praise and move on
+   - `close` → pinpoint tip, retry the same expression
+   - `poor` → back to the model phrase (re-present and retry)
+7. Retry cap N = **3** (max 3 tries per expression, then gently move on).
+8. Silence wait = **8000 ms** (fed to the state machine as a `SILENCE_TIMEOUT` event).
+
+### Open (to be settled during implementation)
+- The teacher's voice (voiceName) and the ratio of English to Japanese follow-up.
+- The `@google/genai` version and the final field names for 3.1 Flash Live (settled right before implementation).
