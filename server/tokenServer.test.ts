@@ -61,3 +61,94 @@ describe("handleTokenRequest", () => {
     expect(JSON.stringify(result.body)).not.toContain(SECRET);
   });
 });
+
+describe("handleTokenRequest — access control", () => {
+  const access = { configuredKey: "family-pass", requireKey: true };
+
+  it("returns 200 when the correct access key is provided", async () => {
+    const result = await handleTokenRequest(deps({ access }), {
+      accessKey: "family-pass",
+    });
+    expect(result.status).toBe(200);
+  });
+
+  it("returns 401 for a wrong or missing access key", async () => {
+    const wrong = await handleTokenRequest(deps({ access }), {
+      accessKey: "nope",
+    });
+    expect(wrong.status).toBe(401);
+    const missing = await handleTokenRequest(deps({ access }), {});
+    expect(missing.status).toBe(401);
+  });
+
+  it("does not mint a token for unauthorized requests", async () => {
+    const createClient = vi.fn();
+    await handleTokenRequest(deps({ access, createClient }), {
+      accessKey: "nope",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when a key is required but not configured (fails closed)", async () => {
+    const result = await handleTokenRequest(
+      deps({ access: { configuredKey: undefined, requireKey: true } }),
+      { accessKey: "anything" },
+    );
+    expect(result.status).toBe(500);
+  });
+
+  it("never echoes the configured access key in error bodies", async () => {
+    const result = await handleTokenRequest(deps({ access }), {
+      accessKey: "nope",
+    });
+    expect(JSON.stringify(result.body)).not.toContain("family-pass");
+  });
+});
+
+describe("handleTokenRequest — rate limiting", () => {
+  const allow = { check: () => ({ allowed: true, retryAfterMs: 0 }) };
+  const deny = { check: () => ({ allowed: false, retryAfterMs: 42_000 }) };
+
+  it("returns 200 when under the rate limit", async () => {
+    const result = await handleTokenRequest(deps({ rateLimiter: allow }), {
+      clientIp: "203.0.113.7",
+    });
+    expect(result.status).toBe(200);
+  });
+
+  it("returns 429 with a Retry-After header when rate limited", async () => {
+    const result = await handleTokenRequest(deps({ rateLimiter: deny }), {
+      clientIp: "203.0.113.7",
+    });
+    expect(result.status).toBe(429);
+    expect(result.headers?.["Retry-After"]).toBe("42");
+  });
+
+  it("does not mint a token for rate-limited requests", async () => {
+    const createClient = vi.fn();
+    await handleTokenRequest(deps({ rateLimiter: deny, createClient }), {
+      clientIp: "203.0.113.7",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits by client IP", async () => {
+    const check = vi.fn(() => ({ allowed: true, retryAfterMs: 0 }));
+    await handleTokenRequest(deps({ rateLimiter: { check } }), {
+      clientIp: "203.0.113.7",
+    });
+    expect(check).toHaveBeenCalledWith("203.0.113.7");
+  });
+
+  it("checks access before consuming rate-limit quota", async () => {
+    const check = vi.fn(() => ({ allowed: true, retryAfterMs: 0 }));
+    await handleTokenRequest(
+      deps({
+        access: { configuredKey: "family-pass", requireKey: true },
+        rateLimiter: { check },
+      }),
+      { accessKey: "wrong", clientIp: "203.0.113.7" },
+    );
+    expect(check).not.toHaveBeenCalled();
+  });
+});

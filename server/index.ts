@@ -9,6 +9,7 @@
 import { createServer } from "node:http";
 import { GoogleGenAI } from "@google/genai";
 import { handleTokenRequest, type HandlerDeps } from "./tokenServer";
+import { createRateLimiter, TOKEN_RATE_LIMIT } from "./rateLimiter";
 import type { AuthTokenClient } from "./tokenService";
 
 const port = Number(process.env.TOKEN_SERVER_PORT ?? 8787);
@@ -21,12 +22,23 @@ const deps: HandlerDeps = {
       apiKey,
       httpOptions: { apiVersion: "v1alpha" },
     }) as unknown as AuthTokenClient,
+  // Local dev: enforced only when APP_ACCESS_KEY is set (production always
+  // requires it — see api/token.ts).
+  access: { configuredKey: process.env.APP_ACCESS_KEY, requireKey: false },
+  rateLimiter: createRateLimiter(TOKEN_RATE_LIMIT),
 };
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/api/token") {
-    const { status, body } = await handleTokenRequest(deps);
-    res.writeHead(status, { "Content-Type": "application/json" });
+    const { status, body, headers } = await handleTokenRequest(deps, {
+      accessKey: headerValue(req.headers["x-access-key"]),
+      clientIp: req.socket.remoteAddress ?? undefined,
+    });
+    res.writeHead(status, { "Content-Type": "application/json", ...headers });
     res.end(JSON.stringify(body));
     return;
   }
