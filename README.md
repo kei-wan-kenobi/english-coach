@@ -78,6 +78,44 @@ npm run build
 - 音声セッションは 15 分上限。上限到達時はセッション再開ハンドルで自動再接続します。
 - 子供の音声は保存しません（ローカル前提・ログ最小化）。
 
+## デプロイ (Vercel)
+
+音声ストリーミングは「ブラウザ → Gemini Live API」の直接 WebSocket なので、サーバ側は
+`/api/token`（エフェメラルトークン発行）だけをサーバレス関数として動かします。
+ローカル開発は従来通り `npm run dev`（`server/index.ts`）、本番は同じハンドラを
+`api/token.ts` 経由で Vercel Functions が実行します。
+
+### 手順
+
+1. Vercel でこのリポジトリを import（フレームワークは Vite として自動検出）
+2. 環境変数を設定:
+   - `GEMINI_API_KEY` … Gemini API キー（ブラウザには出ません）
+   - `APP_ACCESS_KEY` … アプリの合言葉（**必須**。未設定だとエンドポイントは 500 を返して閉じたままになります）
+   - `GEMINI_LIVE_MODEL` … 任意（モデル上書き）
+3. Deploy
+
+### アクセス方法（合言葉）
+
+初回だけ `https://<app>.vercel.app/?key=<合言葉>` で開きます。合言葉は localStorage に
+保存され、URL からは即座に消されます（履歴・共有対策）。以降は素の URL でOK。
+
+### 不正利用対策（3層）
+
+| 層 | 内容 |
+|----|------|
+| アクセスキー | `/api/token` は `x-access-key` ヘッダが合言葉と一致しないと 401。本番でキー未設定なら 500（fail-closed） |
+| レート制限 | IP ごとに 10 回/分で 429 + `Retry-After`。インメモリのためインスタンス単位のベストエフォート |
+| 予算上限 | Google Cloud 側で設定（下記） |
+
+### Google Cloud の予算アラート（推奨・必須級）
+
+1. [Google Cloud Console](https://console.cloud.google.com/) で API キーが属するプロジェクトを開く
+2. 「お支払い」→「予算とアラート」→ 予算を作成（例: 月 ¥1,000、50/90/100% で通知）
+3. あわせて「APIとサービス」→「認証情報」で API キーに **API 制限**（Generative Language API のみ）をかける
+
+ローカルでも合言葉の挙動を試す場合は `.env` に `APP_ACCESS_KEY` を設定し、
+`http://localhost:5173/?key=<合言葉>` で開きます（未設定ならローカルは鍵なしで動作）。
+
 ## ライセンス
 
 [MIT License](./LICENSE) で公開しています。
@@ -168,6 +206,45 @@ session: `/?demo=speaking` (`speaking` / `listening` / `waiting` / `celebrating`
 - Voice sessions are capped at 15 minutes; the app auto-reconnects with a session
   resumption handle when the cap is hit.
 - The child's voice is never stored (local-first, minimal logging).
+
+## Deployment (Vercel)
+
+Audio streams directly from the browser to the Gemini Live API over WebSocket, so the
+server side is just `/api/token` (ephemeral token minting) running as a serverless
+function. Local dev keeps using `npm run dev` (`server/index.ts`); production runs the
+same tested handler through `api/token.ts` on Vercel Functions.
+
+### Steps
+
+1. Import this repository in Vercel (auto-detected as a Vite project)
+2. Set environment variables:
+   - `GEMINI_API_KEY` … your Gemini API key (never reaches the browser)
+   - `APP_ACCESS_KEY` … the app passphrase (**required** — without it the endpoint fails closed with 500)
+   - `GEMINI_LIVE_MODEL` … optional model override
+3. Deploy
+
+### Access (passphrase)
+
+Open `https://<app>.vercel.app/?key=<passphrase>` once. The passphrase is persisted to
+localStorage and immediately scrubbed from the URL (protects history / copy-paste
+sharing). Subsequent visits use the plain URL.
+
+### Abuse protection (three layers)
+
+| Layer | Detail |
+|-------|--------|
+| Access key | `/api/token` returns 401 unless the `x-access-key` header matches; in production a missing key config fails closed with 500 |
+| Rate limiting | 10 requests/min per IP → 429 + `Retry-After`. In-memory, so best-effort per warm instance |
+| Budget cap | configured on the Google Cloud side (below) |
+
+### Google Cloud budget alerts (strongly recommended)
+
+1. Open the project that owns your API key in the [Google Cloud Console](https://console.cloud.google.com/)
+2. Billing → Budgets & alerts → create a budget (e.g. a small monthly cap with 50/90/100% notifications)
+3. Also restrict the API key under APIs & Services → Credentials (**API restriction**: Generative Language API only)
+
+To try the passphrase flow locally, set `APP_ACCESS_KEY` in `.env` and open
+`http://localhost:5173/?key=<passphrase>` (without it, local dev stays keyless).
 
 ## License
 

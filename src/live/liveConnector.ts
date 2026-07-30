@@ -8,6 +8,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { buildLiveConfig, DEFAULT_LIVE_MODEL } from "./liveConfig";
+import { getStoredAccessKey } from "../app/accessKey";
 import type {
   LiveConnector,
   LiveConnectorCallbacks,
@@ -22,11 +23,23 @@ interface TokenResponse {
   error?: string;
 }
 
+// Parent-facing messages for the deployed app (shown via the app's error line).
+const MESSAGES: Record<number, string> = {
+  401: "あいことばが ちがうみたい。おうちのひとに URL（?key=…）を たしかめてもらってね。",
+  429: "ちょっと こんでいるみたい。すこし まってから もういちど ためしてね。",
+};
+
 async function fetchToken(tokenUrl: string): Promise<{ token: string; model: string }> {
-  const response = await fetch(tokenUrl);
+  const accessKey = getStoredAccessKey();
+  const response = await fetch(
+    tokenUrl,
+    accessKey ? { headers: { "x-access-key": accessKey } } : undefined,
+  );
   const body = (await response.json()) as TokenResponse;
   if (!response.ok || !body.success || !body.data) {
-    throw new Error(body.error ?? "Failed to fetch session token");
+    throw new Error(
+      MESSAGES[response.status] ?? body.error ?? "Failed to fetch session token",
+    );
   }
   return body.data;
 }
