@@ -23,9 +23,14 @@ export interface RateLimiterOptions {
   now?: () => number;
 }
 
-/** Default budget for /api/token: ample for one family, hostile to scripts. */
+/**
+ * Default budget for /api/token: generous for real family use (page reloads,
+ * retries, 15-min session reconnects all mint tokens) while still capping a
+ * script hammering a leaked access key. The hard cost backstop is the Google
+ * Cloud budget cap, not this best-effort in-memory limiter.
+ */
 export const TOKEN_RATE_LIMIT: Pick<RateLimiterOptions, "limit" | "windowMs"> = {
-  limit: 10,
+  limit: 60,
   windowMs: 60_000,
 };
 

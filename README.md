@@ -104,7 +104,7 @@ npm run build
 | 層 | 内容 |
 |----|------|
 | アクセスキー | `/api/token` は `x-access-key` ヘッダが合言葉と一致しないと 401。本番でキー未設定なら 500（fail-closed） |
-| レート制限 | IP ごとに 10 回/分で 429 + `Retry-After`。インメモリのためインスタンス単位のベストエフォート |
+| レート制限 | IP ごとに 60 回/分で 429 + `Retry-After`。インメモリのためインスタンス単位のベストエフォート |
 | 予算上限 | Google Cloud 側で設定（下記） |
 
 ### Google Cloud の予算アラート（推奨・必須級）
@@ -234,7 +234,7 @@ sharing). Subsequent visits use the plain URL.
 | Layer | Detail |
 |-------|--------|
 | Access key | `/api/token` returns 401 unless the `x-access-key` header matches; in production a missing key config fails closed with 500 |
-| Rate limiting | 10 requests/min per IP → 429 + `Retry-After`. In-memory, so best-effort per warm instance |
+| Rate limiting | 60 requests/min per IP → 429 + `Retry-After`. In-memory, so best-effort per warm instance |
 | Budget cap | configured on the Google Cloud side (below) |
 
 ### Google Cloud budget alerts (strongly recommended)
