@@ -8,13 +8,13 @@
  * - internal/upstream error details are never echoed to the client;
  * - access is checked before rate limiting, both before any minting.
  */
-import { checkAccess, type AccessPolicy } from "./accessControl";
-import type { RateLimiter } from "./rateLimiter";
+import { checkAccess, type AccessPolicy } from "./accessControl.js";
+import type { RateLimiter } from "./rateLimiter.js";
 import {
   mintEphemeralToken,
   type AuthTokenClient,
   type EphemeralToken,
-} from "./tokenService";
+} from "./tokenService.js";
 
 export interface HandlerDeps {
   /** Reads the server-side API key (e.g. from process.env). */

@@ -5,7 +5,7 @@
  * The Gemini client is injected (only the `authTokens.create` surface is used),
  * which keeps this unit testable without a network call.
  */
-import { buildLiveConfig, DEFAULT_LIVE_MODEL } from "../src/live/liveConfig";
+import { buildLiveConfig, DEFAULT_LIVE_MODEL } from "../src/live/liveConfig.js";
 
 /** Minimal slice of the Gemini SDK this service depends on. */
 export interface AuthTokenClient {

@@ -8,9 +8,9 @@
  */
 import { createServer } from "node:http";
 import { GoogleGenAI } from "@google/genai";
-import { handleTokenRequest, type HandlerDeps } from "./tokenServer";
-import { createRateLimiter, TOKEN_RATE_LIMIT } from "./rateLimiter";
-import type { AuthTokenClient } from "./tokenService";
+import { handleTokenRequest, type HandlerDeps } from "./tokenServer.js";
+import { createRateLimiter, TOKEN_RATE_LIMIT } from "./rateLimiter.js";
+import type { AuthTokenClient } from "./tokenService.js";
 
 const port = Number(process.env.TOKEN_SERVER_PORT ?? 8787);
 

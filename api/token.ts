@@ -11,9 +11,9 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI } from "@google/genai";
-import { handleTokenRequest, type HandlerDeps } from "../server/tokenServer";
-import { createRateLimiter, TOKEN_RATE_LIMIT } from "../server/rateLimiter";
-import type { AuthTokenClient } from "../server/tokenService";
+import { handleTokenRequest, type HandlerDeps } from "../server/tokenServer.js";
+import { createRateLimiter, TOKEN_RATE_LIMIT } from "../server/rateLimiter.js";
+import type { AuthTokenClient } from "../server/tokenService.js";
 
 const rateLimiter = createRateLimiter(TOKEN_RATE_LIMIT);
 
